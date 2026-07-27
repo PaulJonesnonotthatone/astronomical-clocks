@@ -248,7 +248,7 @@
                     <span class="data-value" id="moonrise">--:--</span>
                 </div>
                 <div class="data-point">
-                    <span class="label">Current Moon Phase</span>
+                    <span class="label">Moon Illumination</span>
                     <span class="moon-phase-value" id="moon-phase">--</span>
                 </div>
                 <div class="data-point">
@@ -284,7 +284,7 @@
                     updateAstroData();
                     updateCoordinates();
                 },
-                (err) => console.log("Location access denied. Using UTC coordinates."),
+                (err) => console.log("Location access denied."),
                 { timeout: 10000 }
             );
         }
@@ -416,32 +416,94 @@
             }
         }
 
-        function getMoonPhaseData(now) {
+        function getMoonIlluminationData(now) {
             const jd = getJulianDate(now);
             const daysSinceNew = (jd - 2451549.5) % 29.53058867;
             const age = (daysSinceNew + 29.53058867) % 29.53058867;
 
-            if (age < 1.84566) return { name: "New Moon" };
-            if (age < 5.53699) return { name: "Waxing Crescent" };
-            if (age < 9.22831) return { name: "First Quarter" };
-            if (age < 12.91963) return { name: "Waxing Gibbous" };
-            if (age < 16.61096) return { name: "Full Moon" };
-            if (age < 20.30228) return { name: "Waning Gibbous" };
-            if (age < 23.99361) return { name: "Third Quarter" };
-            if (age < 27.68493) return { name: "Waning Crescent" };
-            return { name: "New Moon" };
+            // Percentage illumination based on phase angle
+            const fraction = (1 - Math.cos((age / 29.53058867) * 2 * Math.PI)) / 2;
+            const percent = Math.round(fraction * 100);
+
+            // Waxing if age is less than half a synodic month, otherwise waning
+            const isWaxing = age <= (29.53058867 / 2);
+            const sign = isWaxing ? "+" : "-";
+
+            return `${sign}${percent}%`;
         }
 
-        function getMoonRiseSet(now, isRise) {
+        /* --- ACCURATE MOONRISE & MOONSET CALCULATIONS --- */
+
+        function getMoonPosition(date) {
+            const d = (date.getTime() / 86400000) - 10957.5; // Days since J2000.0
+            
+            const L = (218.316 + 13.176396 * d) % 360; // Mean longitude
+            const M = (134.963 + 13.064993 * d) % 360; // Mean anomaly
+            const F = (93.272 + 13.229350 * d) % 360;  // Node distance
+            
+            const rad = Math.PI / 180;
+            const l = L + 6.289 * Math.sin(M * rad);
+            const b = 5.128 * Math.sin(F * rad);
+            const e = 23.439 - 0.0000004 * d;
+            
+            const lRad = l * rad;
+            const bRad = b * rad;
+            const eRad = e * rad;
+            
+            const x = Math.cos(bRad) * Math.cos(lRad);
+            const y = Math.cos(bRad) * Math.sin(lRad) * Math.cos(eRad) - Math.sin(bRad) * Math.sin(eRad);
+            const z = Math.cos(bRad) * Math.sin(lRad) * Math.sin(eRad) + Math.sin(bRad) * Math.cos(eRad);
+            
+            let ra = Math.atan2(y, x) * 180 / Math.PI;
+            if (ra < 0) ra += 360;
+            const dec = Math.asin(z) * 180 / Math.PI;
+            
+            return { ra, dec };
+        }
+
+        function getMoonAltitude(date, lat, lon) {
+            const pos = getMoonPosition(date);
+            const lst = getLST(date, lon) * 15; // LST in degrees
+            let ha = lst - pos.ra; // Hour Angle
+            
+            const rad = Math.PI / 180;
+            const latRad = lat * rad;
+            const decRad = pos.dec * rad;
+            const haRad = ha * rad;
+            
+            const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+            return Math.asin(sinAlt) * 180 / Math.PI;
+        }
+
+        function getNextMoonEvent(fromDate, lat, lon, targetIsRise) {
             if (!hasLocation) return "--:--";
-            const jd = getJulianDate(now);
-            const lunarAge = ((jd - 2451549.5) % 29.53058867 + 29.53058867) % 29.53058867;
-            const moonOffsetHours = (lunarAge / 29.53058867) * 24;
-
-            const baseTime = isRise ? 6 : 18;
-            const approxLocalTime = (baseTime + moonOffsetHours) % 24;
-
-            return formatHM(approxLocalTime);
+            
+            const targetAlt = 0.125; // Horizon altitude including refraction & lunar radius
+            let t0 = new Date(fromDate.getTime());
+            let alt0 = getMoonAltitude(t0, lat, lon) - targetAlt;
+            
+            const stepMinutes = 30;
+            const maxSteps = (36 * 60) / stepMinutes; // Search up to 36 hours ahead
+            
+            for (let i = 1; i <= maxSteps; i++) {
+                let t1 = new Date(fromDate.getTime() + i * stepMinutes * 60 * 1000);
+                let alt1 = getMoonAltitude(t1, lat, lon) - targetAlt;
+                
+                const isRise = alt0 < 0 && alt1 >= 0;
+                const isSet = alt0 >= 0 && alt1 < 0;
+                
+                if ((targetIsRise && isRise) || (!targetIsRise && isSet)) {
+                    // Linear interpolation to locate exact minute
+                    const fraction = -alt0 / (alt1 - alt0);
+                    const eventTime = new Date(t0.getTime() + fraction * stepMinutes * 60 * 1000);
+                    return `${pad(eventTime.getHours())}:${pad(eventTime.getMinutes())}`;
+                }
+                
+                t0 = t1;
+                alt0 = alt1;
+            }
+            
+            return "--:--";
         }
 
         function updateClocks() {
@@ -468,11 +530,10 @@
             document.getElementById('sunrise').textContent = getSunRiseSet(now, userLat, userLon, true);
             document.getElementById('sunset').textContent = getSunRiseSet(now, userLat, userLon, false);
             
-            const moonData = getMoonPhaseData(now);
-            document.getElementById('moon-phase').textContent = moonData.name;
+            document.getElementById('moon-phase').textContent = getMoonIlluminationData(now);
 
-            document.getElementById('moonrise').textContent = getMoonRiseSet(now, true);
-            document.getElementById('moonset').textContent = getMoonRiseSet(now, false);
+            document.getElementById('moonrise').textContent = getNextMoonEvent(now, userLat, userLon, true);
+            document.getElementById('moonset').textContent = getNextMoonEvent(now, userLat, userLon, false);
         }
 
         setInterval(updateClocks, 1000);
