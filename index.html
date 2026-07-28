@@ -516,88 +516,171 @@
             }
         }
 
-        /* --- MOON CALCULATIONS --- */
+        /* --- HIGH-PRECISION MOON POSITION & EVENT ENGINE (MEEUS PERTURBATION MODEL) --- */
+
+        function getMoonPositionDetailed(date) {
+            const d = (date.getTime() / 86400000) - 10957.5; // Days since J2000.0
+
+            // Mean elements of the Moon's orbit
+            const L = (218.3164477 + 13.17639647 * d) % 360; // Mean longitude
+            const M = (134.9633964 + 13.06499295 * d) % 360; // Moon mean anomaly
+            const F = (93.2720950 + 13.22935026 * d) % 360;  // Mean distance from node
+            const D = (297.8501921 + 12.19074912 * d) % 360; // Mean elongation
+            const SunM = (357.5291092 + 0.98560028 * d) % 360; // Sun mean anomaly
+
+            const mRad = M * RAD;
+            const fRad = F * RAD;
+            const dRad = D * RAD;
+            const smRad = SunM * RAD;
+
+            // Longitude perturbations (Evection, Variation, Annual Eq, etc.)
+            let l = L + 
+                6.288750 * Math.sin(mRad) +
+                1.274027 * Math.sin(2 * dRad - mRad) +
+                0.658314 * Math.sin(2 * dRad) +
+                0.213618 * Math.sin(2 * mRad) -
+                0.185116 * Math.sin(smRad) -
+                0.114332 * Math.sin(2 * fRad) +
+                0.058793 * Math.sin(2 * dRad - 2 * mRad) +
+                0.057066 * Math.sin(2 * dRad - smRad - mRad) +
+                0.053322 * Math.sin(2 * dRad + mRad) +
+                0.045758 * Math.sin(2 * dRad - smRad);
+
+            // Latitude perturbations
+            let b = 5.128122 * Math.sin(fRad) +
+                0.280606 * Math.sin(mRad + fRad) +
+                0.277693 * Math.sin(mRad - fRad) +
+                0.173237 * Math.sin(2 * dRad - fRad) +
+                0.055413 * Math.sin(2 * dRad - mRad + fRad) +
+                0.046271 * Math.sin(2 * dRad - mRad - fRad);
+
+            // Horizontal Parallax (HP) in degrees
+            const hp = 0.9507 + 0.0518 * Math.cos(mRad) + 0.0095 * Math.cos(2 * dRad - mRad) + 0.0078 * Math.cos(2 * dRad);
+
+            const eRad = (23.439 - 0.0000004 * d) * RAD;
+            const lRad = l * RAD;
+            const bRad = b * RAD;
+
+            const x = Math.cos(bRad) * Math.cos(lRad);
+            const y = Math.cos(bRad) * Math.sin(lRad) * Math.cos(eRad) - Math.sin(bRad) * Math.sin(eRad);
+            const z = Math.cos(bRad) * Math.sin(lRad) * Math.sin(eRad) + Math.sin(bRad) * Math.cos(eRad);
+
+            let ra = Math.atan2(y, x) * DEG;
+            if (ra < 0) ra += 360;
+            const dec = Math.asin(z) * DEG;
+
+            return { ra, dec, hp };
+        }
+
+        function getMoonPosition(date) {
+            return getMoonPositionDetailed(date);
+        }
 
         function getMoonIlluminationData(now) {
-            const jd = getJulianDate(now);
-            const daysSinceNew = (jd - 2451549.5) % 29.53058867;
-            const age = (daysSinceNew + 29.53058867) % 29.53058867;
+            const d = (now.getTime() / 86400000) - 10957.5;
 
-            const fraction = (1 - Math.cos((age / 29.53058867) * 2 * Math.PI)) / 2;
-            const percent = Math.round(fraction * 100);
+            const sunL = (280.460 + 0.9856474 * d) % 360;
+            const sunM = ((357.528 + 0.9856003 * d) % 360) * RAD;
+            const sunLambda = (sunL + 1.915 * Math.sin(sunM) + 0.020 * Math.sin(2 * sunM)) * RAD;
+            const eRad = (23.439 - 0.0000004 * d) * RAD;
 
-            const isWaxing = age <= (29.53058867 / 2);
+            const sunRA = Math.atan2(Math.cos(eRad) * Math.sin(sunLambda), Math.cos(sunLambda));
+            const sunDec = Math.asin(Math.sin(eRad) * Math.sin(sunLambda));
+
+            const moonPos = getMoonPositionDetailed(now);
+            const moonRA = moonPos.ra * RAD;
+            const moonDec = moonPos.dec * RAD;
+
+            const cosElongation = Math.sin(sunDec) * Math.sin(moonDec) + 
+                                  Math.cos(sunDec) * Math.cos(moonDec) * Math.cos(sunRA - moonRA);
+            const elongation = Math.acos(Math.max(-1, Math.min(1, cosElongation)));
+
+            const phi = Math.atan2(149600000 * Math.sin(elongation), 384000 - 149600000 * Math.cos(elongation));
+            const k = (1 + Math.cos(phi)) / 2;
+
+            const percent = Math.round(k * 100);
+
+            let moonLng = (moonPos.ra) % 360;
+            let sunLng = (sunRA * DEG) % 360;
+            let diff = (moonLng - sunLng + 360) % 360;
+            const isWaxing = diff < 180;
             const sign = isWaxing ? "+" : "-";
 
             return `${sign}${percent}%`;
         }
 
-        function getMoonPosition(date) {
-            const d = (date.getTime() / 86400000) - 10957.5;
-            
-            const L = (218.316 + 13.176396 * d) % 360;
-            const M = (134.963 + 13.064993 * d) % 360;
-            const F = (93.272 + 13.229350 * d) % 360;
-            
-            const l = L + 6.289 * Math.sin(M * RAD);
-            const b = 5.128 * Math.sin(F * RAD);
-            const e = 23.439 - 0.0000004 * d;
-            
-            const lRad = l * RAD;
-            const bRad = b * RAD;
-            const eRad = e * RAD;
-            
-            const x = Math.cos(bRad) * Math.cos(lRad);
-            const y = Math.cos(bRad) * Math.sin(lRad) * Math.cos(eRad) - Math.sin(bRad) * Math.sin(eRad);
-            const z = Math.cos(bRad) * Math.sin(lRad) * Math.sin(eRad) + Math.sin(bRad) * Math.cos(eRad);
-            
-            let ra = Math.atan2(y, x) * DEG;
-            if (ra < 0) ra += 360;
-            const dec = Math.asin(z) * DEG;
-            
-            return { ra, dec };
-        }
-
-        function getMoonAltitude(date, lat, lon) {
-            const pos = getMoonPosition(date);
+        // Topocentric Apparent Elevation relative to the atmospheric horizon
+        function getMoonApparentAltitude(date, lat, lon) {
+            const pos = getMoonPositionDetailed(date);
             const lst = getLST(date, lon) * 15;
-            let ha = lst - pos.ra;
-            
+            let ha = (lst - pos.ra + 360) % 360;
+
             const latRad = lat * RAD;
             const decRad = pos.dec * RAD;
             const haRad = ha * RAD;
-            
-            const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
-            return Math.asin(sinAlt) * DEG;
+
+            const sinGeocentricAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+            const geoAlt = Math.asin(sinGeocentricAlt) * DEG;
+
+            // Topocentric correction incorporating dynamic horizontal parallax (HP)
+            const topocentricAlt = geoAlt - pos.hp * Math.cos(geoAlt * RAD);
+
+            // Target altitude for top-limb moon contact: atmospheric refraction (-0.5667°) minus semi-diameter
+            const semiDiameter = 0.2724 * pos.hp;
+            const targetHorizonAlt = -0.5667 - semiDiameter;
+
+            return topocentricAlt - targetHorizonAlt;
         }
 
         function getNextMoonEvent(fromDate, lat, lon, targetIsRise) {
             if (!hasLocation) return "--:--";
-            
-            const targetAlt = 0.125;
+
             let t0 = new Date(fromDate.getTime());
-            let alt0 = getMoonAltitude(t0, lat, lon) - targetAlt;
-            
+            let alt0 = getMoonApparentAltitude(t0, lat, lon);
+
             const stepMinutes = 30;
-            const maxSteps = (36 * 60) / stepMinutes;
-            
+            const maxSteps = (36 * 60) / stepMinutes; // Search window up to 36 hours ahead
+
             for (let i = 1; i <= maxSteps; i++) {
                 let t1 = new Date(fromDate.getTime() + i * stepMinutes * 60 * 1000);
-                let alt1 = getMoonAltitude(t1, lat, lon) - targetAlt;
-                
+                let alt1 = getMoonApparentAltitude(t1, lat, lon);
+
                 const isRise = alt0 < 0 && alt1 >= 0;
                 const isSet = alt0 >= 0 && alt1 < 0;
-                
+
                 if ((targetIsRise && isRise) || (!targetIsRise && isSet)) {
-                    const fraction = -alt0 / (alt1 - alt0);
-                    const eventTime = new Date(t0.getTime() + fraction * stepMinutes * 60 * 1000);
+                    // Refine exact horizon crossing with a high-precision binary search (bisection method)
+                    let low = t0.getTime();
+                    let high = t1.getTime();
+                    let midTime = low;
+
+                    for (let step = 0; step < 8; step++) {
+                        midTime = (low + high) / 2;
+                        let midAlt = getMoonApparentAltitude(new Date(midTime), lat, lon);
+
+                        if (targetIsRise) {
+                            if (midAlt < 0) low = midTime;
+                            else high = midTime;
+                        } else {
+                            if (midAlt >= 0) low = midTime;
+                            else high = midTime;
+                        }
+                    }
+
+                    const eventTime = new Date(midTime);
+                    
+                    // Round time to nearest minute for clean clock presentation
+                    if (eventTime.getSeconds() >= 30) {
+                        eventTime.setMinutes(eventTime.getMinutes() + 1);
+                    }
+
                     return `${pad(eventTime.getHours())}:${pad(eventTime.getMinutes())}`;
                 }
-                
+
                 t0 = t1;
                 alt0 = alt1;
             }
-            
+
             return "--:--";
         }
 
