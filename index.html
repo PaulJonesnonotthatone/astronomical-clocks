@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Astro Clock Dashboard</title>
     <style>
         :root {
@@ -25,28 +25,57 @@
             padding: 0;
         }
 
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Guarantees no scrollbars */
+        }
+
         body {
             background-color: #000000;
             color: var(--theme-color);
             font-family: 'Courier New', Courier, monospace;
-            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            padding: 2rem;
+            justify-content: center;
             align-items: center;
+            padding: 1.5vh 2vw;
             transition: color 0.5s ease;
         }
 
-        /* Top Row Setup - Labels & Clocks Centered Individually */
-        .top-row {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: end; 
+        /* Dashboard Container Wrapper */
+        .dashboard-container {
+            display: flex;
+            flex-direction: column;
             width: 100%;
-            margin-bottom: 3rem;
+            max-width: 1200px;
+            height: 100%;
+            max-height: 100vh;
+            justify-content: center;
+        }
+
+        /* Top Section Setup */
+        .top-section {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            margin-bottom: 2vh;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 1.5rem;
+            padding-bottom: 1.5vh;
             transition: border-color 0.5s ease;
+            gap: 1vh;
+        }
+
+        .top-row-1 {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .top-row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%;
         }
 
         .clock-box {
@@ -57,53 +86,54 @@
         }
 
         .label {
-            font-size: 1rem;
+            font-size: clamp(0.6rem, 1.2vw, 1rem);
             text-transform: uppercase;
             letter-spacing: 2px;
             color: var(--label-color);
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2vh;
             transition: color 0.5s ease;
         }
 
+        .top-section .clock-box .label {
+            font-size: clamp(0.75rem, 1.6vw, 1.3rem);
+        }
+
         .time-lct, .time-utc {
-            font-size: 4rem;
+            font-size: clamp(1.8rem, 4.2vw, 3.8rem);
             font-weight: bold;
             line-height: 1;
         }
 
         .time-lst {
-            font-size: 6rem;
+            font-size: clamp(2.5rem, 6.5vw, 5.8rem);
             font-weight: bold;
             line-height: 1;
         }
 
-        /* Main Container for Columns with Icons */
+        /* Main Grid Container for All 4 Columns */
         .columns-container {
-            display: flex;
-            align-items: stretch;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            column-gap: 0;
             width: 100%;
-            max-width: 1000px;
+            align-items: flex-start;
         }
+
+        /* Column Gap Scaling */
+        .columns-container > :nth-child(1) { margin-right: 0.8vw; }
+        .columns-container > :nth-child(2) { margin-left: 0.8vw; margin-right: 0.6vw; }
+        .columns-container > :nth-child(3) { margin-left: 0.6vw; margin-right: 0.3vw; }
+        .columns-container > :nth-child(4) { margin-left: 0.3vw; }
 
         .symbol-wrapper {
-            flex: 1;
             display: flex;
+            flex-direction: column;
+            align-items: center;
             align-self: flex-start;
-            padding-top: 0.5rem;
+            padding-top: 0.5vh;
+            text-align: center;
         }
 
-        .symbol-wrapper.left {
-            justify-content: flex-start;
-            padding-left: 2rem;
-        }
-
-        .symbol-wrapper.right {
-            justify-content: flex-end;
-            padding-right: 2rem;
-        }
-
-        /* Base Astro Symbol Style */
         .astro-symbol {
             color: var(--theme-color);
             user-select: none;
@@ -111,30 +141,57 @@
             transition: color 0.5s ease;
         }
 
-        .sun-symbol {
-            font-size: 6.65rem;
+        .sun-symbol, .moon-symbol {
+            font-size: clamp(2.8rem, 6.5vw, 6.2rem);
         }
 
-        /* Static Moon Symbol matching theme color */
-        .moon-symbol {
-            font-size: 6.65rem;
+        .symbol-subtext {
+            font-size: clamp(0.75rem, 1.4vw, 1.1rem);
+            font-weight: bold;
+            margin-top: 0.5vh;
+            color: var(--theme-color);
+            transition: color 0.5s ease;
+            white-space: nowrap;
+            text-align: center;
         }
 
-        /* Two Columns Setup - Moved 15% closer to edges */
-        .main-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
+        .info-box {
+            display: flex;
+            flex-direction: column;
+            margin-top: 1vh;
+            gap: 0.5vh;
+            align-items: center;
+            text-align: center;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: clamp(0.5rem, 0.9vw, 0.75rem);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--label-color);
+            transition: color 0.5s ease;
+        }
+
+        .info-value {
+            font-size: clamp(0.7rem, 1.2vw, 1rem);
+            font-weight: bold;
+            color: var(--theme-color);
+            transition: color 0.5s ease;
+            white-space: nowrap;
         }
 
         .column {
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
-            font-size: 3rem;
+            gap: 1.8vh;
+            font-size: clamp(1.4rem, 3.2vw, 2.8rem);
             font-weight: bold;
             text-align: center;
         }
@@ -149,83 +206,76 @@
             line-height: 1.1;
         }
 
-        /* Moon Phase: 2.85rem single line */
         .moon-phase-value {
-            font-size: 2.85rem;
+            font-size: clamp(1.3rem, 3vw, 2.6rem);
             line-height: 1.1;
             white-space: nowrap;
         }
 
-        /* Latitude/Longitude row - Gap reduced by 25% */
-        .coordinates-row {
-            margin-top: 1.875rem;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        /* Coordinates: 1.44rem */
-        .lat-long-value {
-            font-size: 1.44rem;
-            font-weight: bold;
-            line-height: 1.1;
-            color: var(--theme-color);
-            transition: color 0.5s ease;
-        }
-
-        /* Responsive scaling for mobile devices */
-        @media (max-width: 900px) {
-            .top-row {
-                grid-template-columns: 1fr;
-                gap: 1.5rem;
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            body {
+                padding: 1vh 1vw;
             }
-            .time-lst { font-size: 4.5rem; }
-            .time-lct, .time-utc { font-size: 3rem; }
-            
-            @media (max-width: 600px) {
-                .main-columns {
-                    grid-template-columns: 1fr;
-                }
+            .top-section {
+                margin-bottom: 1.2vh;
+                padding-bottom: 1vh;
+                gap: 0.5vh;
             }
-            
-            .column { font-size: 2.2rem; }
-            .moon-phase-value { font-size: 1.8rem; }
-            .lat-long-value { font-size: 1.15rem; }
-            .sun-symbol, .moon-symbol { font-size: 4rem; }
-            .symbol-wrapper.left { padding-left: 0.5rem; }
-            .symbol-wrapper.right { padding-right: 0.5rem; }
+            .column {
+                gap: 1vh;
+            }
+            .info-box {
+                margin-top: 0.5vh;
+                gap: 0.2vh;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- Top Row -->
-    <div class="top-row">
-        <div class="clock-box">
-            <span class="label">Local Civil Time</span>
-            <span class="time-lct" id="lct">--:--:--</span>
+    <div class="dashboard-container">
+        <!-- Top Clocks Section -->
+        <div class="top-section">
+            <!-- Row 1: Sidereal Time Centered -->
+            <div class="top-row-1">
+                <div class="clock-box">
+                    <span class="label">Local Sidereal Time</span>
+                    <span class="time-lst" id="lst">--:--:--</span>
+                </div>
+            </div>
+            <!-- Row 2: UTC (Left Two Columns) & Local Civil Time (Right Two Columns) -->
+            <div class="top-row-2">
+                <div class="clock-box">
+                    <span class="label">UTC</span>
+                    <span class="time-utc" id="utc">--:--:--</span>
+                </div>
+                <div class="clock-box">
+                    <span class="label">Local Civil Time</span>
+                    <span class="time-lct" id="lct">--:--:--</span>
+                </div>
+            </div>
         </div>
-        <div class="clock-box">
-            <span class="label">Local Sidereal Time</span>
-            <span class="time-lst" id="lst">--:--:--</span>
-        </div>
-        <div class="clock-box">
-            <span class="label">UTC</span>
-            <span class="time-utc" id="utc">--:--:--</span>
-        </div>
-    </div>
 
-    <!-- Main Section with Sun/Moon Icons -->
-    <div class="columns-container">
-        <!-- Sun Symbol to the far left -->
-        <div class="symbol-wrapper left">
-            <div class="astro-symbol sun-symbol" title="Solar Column">&#9728;</div>
-        </div>
+        <!-- Main 4-Column Layout Container -->
+        <div class="columns-container">
+            <!-- Column 1: Sun Symbol & Extra Astro Times -->
+            <div class="symbol-wrapper left">
+                <div class="astro-symbol sun-symbol" title="Solar Column">&#9728;</div>
+                <div class="symbol-subtext" id="sun-elevation">Elev: --.-°</div>
+                <div class="info-box">
+                    <div class="info-item">
+                        <span class="info-label">Next Astro Dawn</span>
+                        <span class="info-value" id="astro-start">--:--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Next Astro Dusk</span>
+                        <span class="info-value" id="astro-end">--:--</span>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Main Two Columns -->
-        <div class="main-columns">
-            <!-- Sun Column -->
+            <!-- Column 2: Sun Data Times -->
             <div class="column">
                 <div class="data-point">
                     <span class="label">Next Sunrise</span>
@@ -241,14 +291,14 @@
                 </div>
             </div>
 
-            <!-- Moon Column -->
+            <!-- Column 3: Moon Data Times -->
             <div class="column">
                 <div class="data-point">
                     <span class="label">Next Moonrise</span>
                     <span class="data-value" id="moonrise">--:--</span>
                 </div>
                 <div class="data-point">
-                    <span class="label">Current Moon Phase</span>
+                    <span class="label">Moon Illumination</span>
                     <span class="moon-phase-value" id="moon-phase">--</span>
                 </div>
                 <div class="data-point">
@@ -256,24 +306,31 @@
                     <span class="data-value" id="moonset">--:--</span>
                 </div>
             </div>
-        </div>
 
-        <!-- Static Crescent Moon Symbol to the far right -->
-        <div class="symbol-wrapper right">
-            <div class="astro-symbol moon-symbol" id="moon-symbol" title="Lunar Column">&#9790;</div>
+            <!-- Column 4: Moon Symbol & Location Coordinates -->
+            <div class="symbol-wrapper right">
+                <div class="astro-symbol moon-symbol" id="moon-symbol" title="Lunar Column">&#9790;</div>
+                <div class="info-box">
+                    <div class="info-item">
+                        <span class="info-label">Latitude</span>
+                        <span class="info-value" id="latitude-val">--.-° N</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Longitude</span>
+                        <span class="info-value" id="longitude-val">--.-° W</span>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-
-    <!-- Centered Latitude & Longitude below columns -->
-    <div class="coordinates-row">
-        <span class="label">Latitude / Longitude</span>
-        <span class="lat-long-value" id="coordinates">--° N, --° W</span>
     </div>
 
     <script>
         let userLat = 0;
         let userLon = 0;
         let hasLocation = false;
+
+        const RAD = Math.PI / 180;
+        const DEG = 180 / Math.PI;
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -284,7 +341,7 @@
                     updateAstroData();
                     updateCoordinates();
                 },
-                (err) => console.log("Location access denied. Using UTC coordinates."),
+                (err) => console.log("Location access denied."),
                 { timeout: 10000 }
             );
         }
@@ -297,8 +354,8 @@
             const absLat = Math.abs(userLat).toFixed(4);
             const absLon = Math.abs(userLon).toFixed(4);
 
-            document.getElementById('coordinates').textContent = 
-                `${absLat}° ${latDir}, ${absLon}° ${lonDir}`;
+            document.getElementById('latitude-val').textContent = `${absLat}° ${latDir}`;
+            document.getElementById('longitude-val').textContent = `${absLon}° ${lonDir}`;
         }
 
         function pad(num, size = 2) {
@@ -312,13 +369,6 @@
             const m = Math.floor((hours - h) * 60);
             const s = Math.floor((((hours - h) * 60) - m) * 60);
             return `${pad(h)}:${pad(m)}:${pad(s)}`;
-        }
-
-        function formatHM(hours) {
-            hours = (hours + 24) % 24;
-            const h = Math.floor(hours);
-            const m = Math.floor((hours - h) * 60);
-            return `${pad(h)}:${pad(m)}`;
         }
 
         function getJulianDate(now) {
@@ -338,110 +388,217 @@
             return (lst % 24 + 24) % 24;
         }
 
-        function getEquationOfTime(now) {
-            const jd = getJulianDate(now);
-            const d = jd - 2451545.0;
-            const g = (357.529 + 0.98560028 * d) % 360 * Math.PI / 180;
-            const q = (280.459 + 0.98564736 * d) % 360;
-            const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) % 360 * Math.PI / 180;
-            const e = 23.439 - 0.0000004 * d;
-            const RA = Math.atan2(Math.cos(e * Math.PI / 180) * Math.sin(L), Math.cos(L)) * 180 / Math.PI / 15;
-            return (q / 15) - ((RA % 24 + 24) % 24);
+        /* --- ACCURATE SOLAR & TWILIGHT CALCULATIONS --- */
+
+        function getGamma(date) {
+            const start = new Date(date.getFullYear(), 0, 0);
+            const diff = date - start;
+            const oneDay = 1000 * 60 * 60 * 24;
+            const dayOfYear = Math.floor(diff / oneDay);
+            const hour = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
+            return ((2 * Math.PI) / 365) * (dayOfYear - 1 + (hour - 12) / 24);
+        }
+
+        function getSolarParams(date) {
+            const gamma = getGamma(date);
+            const eqTime = 229.18 * (
+                0.000075 +
+                0.001868 * Math.cos(gamma) -
+                0.032077 * Math.sin(gamma) -
+                0.014615 * Math.cos(2 * gamma) -
+                0.040849 * Math.sin(2 * gamma)
+            );
+
+            const declination = 
+                0.006918 -
+                0.399912 * Math.cos(gamma) +
+                0.070257 * Math.sin(gamma) -
+                0.006758 * Math.cos(2 * gamma) +
+                0.000907 * Math.sin(2 * gamma) -
+                0.002697 * Math.cos(3 * gamma) +
+                0.00148 * Math.sin(3 * gamma);
+
+            return { eqTime, declination };
         }
 
         function getLocalSolarTime(now, lon) {
-            const utcHours = now.getUTCHours() + now.getUTCMinutes()/60 + now.getUTCSeconds()/3600;
-            const eot = getEquationOfTime(now);
-            const solarTime = utcHours + (lon / 15.0) + eot;
+            const { eqTime } = getSolarParams(now);
+            const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+            const solarTime = utcHours + (lon / 15.0) + (eqTime / 60);
             return (solarTime % 24 + 24) % 24;
         }
 
-        function getSunTimesDecimal(now, lat, lon) {
-            if (!hasLocation) return { rise: null, set: null };
-            const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
-            const zenith = 90.833 * Math.PI / 180;
-            const latRad = lat * Math.PI / 180;
-            const lngHour = lon / 15;
+        function getSolarEventTime(date, lat, lng, isSunrise, zenithAngle = 90.833) {
+            const { eqTime, declination } = getSolarParams(date);
+            const zenith = zenithAngle * RAD;
+            const latRad = lat * RAD;
 
-            function calcTime(isRise) {
-                const t = dayOfYear + ((isRise ? 6 : 18) - lngHour) / 24;
-                const M = (0.9856 * t) - 3.289;
-                let L = M + (1.916 * Math.sin(M * Math.PI / 180)) + (0.020 * Math.sin(2 * M * Math.PI / 180)) + 282.634;
-                L = (L % 360 + 360) % 360;
-                
-                let RA = Math.atan(0.91764 * Math.tan(L * Math.PI / 180)) * 180 / Math.PI;
-                RA = (RA % 360 + 360) % 360;
-                RA = RA + (Math.floor(L / 90) * 90 - Math.floor(RA / 90) * 90);
-                RA = RA / 15;
+            const cosHA = (Math.cos(zenith) / (Math.cos(latRad) * Math.cos(declination))) - 
+                          (Math.tan(latRad) * Math.tan(declination));
 
-                const sinDec = 0.39782 * Math.sin(L * Math.PI / 180);
-                const cosDec = Math.cos(Math.asin(sinDec));
-                const cosH = (Math.cos(zenith) - (sinDec * Math.sin(latRad))) / (cosDec * Math.cos(latRad));
+            if (cosHA > 1 || cosHA < -1) return null;
 
-                if (cosH > 1 || cosH < -1) return null;
+            let ha = Math.acos(cosHA) * DEG;
+            if (isSunrise) ha = -ha;
 
-                let H = isRise ? 360 - Math.acos(cosH) * 180 / Math.PI : Math.acos(cosH) * 180 / Math.PI;
-                H = H / 15;
+            const solarNoonUTC = 720 - (4 * lng) - eqTime;
+            const eventUTCMinutes = solarNoonUTC + (ha * 4);
 
-                const T = H + RA - (0.06571 * t) - 6.622;
-                let UT = T - lngHour;
-                UT = (UT % 24 + 24) % 24;
+            const eventDate = new Date(date);
+            eventDate.setUTCHours(0, 0, 0, 0);
+            eventDate.setUTCMinutes(eventUTCMinutes);
 
-                const localOffset = -now.getTimezoneOffset() / 60;
-                return (UT + localOffset + 24) % 24;
-            }
-
-            return { rise: calcTime(true), set: calcTime(false) };
+            return eventDate;
         }
 
-        function getSunRiseSet(now, lat, lon, isRise) {
-            const times = getSunTimesDecimal(now, lat, lon);
-            const time = isRise ? times.rise : times.set;
-            return time !== null ? formatHM(time) : "N/A";
+        function getNextSunriseAndSunset(now, lat, lng) {
+            if (!hasLocation) return { sunrise: null, sunset: null };
+
+            let sunrise = getSolarEventTime(now, lat, lng, true);
+            let sunset = getSolarEventTime(now, lat, lng, false);
+
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            if (!sunrise || now >= sunrise) {
+                sunrise = getSolarEventTime(tomorrow, lat, lng, true);
+            }
+
+            if (!sunset || now >= sunset) {
+                sunset = getSolarEventTime(tomorrow, lat, lng, false);
+            }
+
+            return { sunrise, sunset };
+        }
+
+        function getNextAstroTwilightEvents(now, lat, lng) {
+            if (!hasLocation) return { start: null, end: null };
+
+            let astroStart = getSolarEventTime(now, lat, lng, true, 108);
+            let astroEnd = getSolarEventTime(now, lat, lng, false, 108);
+
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            if (!astroStart || now >= astroStart) {
+                astroStart = getSolarEventTime(tomorrow, lat, lng, true, 108);
+            }
+
+            if (!astroEnd || now >= astroEnd) {
+                astroEnd = getSolarEventTime(tomorrow, lat, lng, false, 108);
+            }
+
+            return { start: astroStart, end: astroEnd };
+        }
+
+        function getCurrentSolarElevation(now, lat, lng) {
+            if (!hasLocation) return null;
+            const { eqTime, declination } = getSolarParams(now);
+            const latRad = lat * RAD;
+
+            const localTimeMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+            const trueSolarTime = localTimeMinutes + eqTime + (4 * lng) - (-now.getTimezoneOffset());
+            const ha = ((trueSolarTime / 4) - 180) * RAD;
+
+            const sinElevation = Math.sin(latRad) * Math.sin(declination) +
+                                 Math.cos(latRad) * Math.cos(declination) * Math.cos(ha);
+
+            return Math.asin(sinElevation) * DEG;
         }
 
         function checkSunPosition(now) {
             if (!hasLocation) return;
-
-            const sunTimes = getSunTimesDecimal(now, userLat, userLon);
-            if (sunTimes.rise === null || sunTimes.set === null) return;
-
-            const currentDecimalHour = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
-            const isSunUp = currentDecimalHour >= sunTimes.rise && currentDecimalHour < sunTimes.set;
-
-            if (isSunUp) {
+            const elevation = getCurrentSolarElevation(now, userLat, userLon);
+            if (elevation !== null && elevation > 0) {
                 document.body.classList.add('sun-up');
             } else {
                 document.body.classList.remove('sun-up');
             }
         }
 
-        function getMoonPhaseData(now) {
+        /* --- MOON CALCULATIONS --- */
+
+        function getMoonIlluminationData(now) {
             const jd = getJulianDate(now);
             const daysSinceNew = (jd - 2451549.5) % 29.53058867;
             const age = (daysSinceNew + 29.53058867) % 29.53058867;
 
-            if (age < 1.84566) return { name: "New Moon" };
-            if (age < 5.53699) return { name: "Waxing Crescent" };
-            if (age < 9.22831) return { name: "First Quarter" };
-            if (age < 12.91963) return { name: "Waxing Gibbous" };
-            if (age < 16.61096) return { name: "Full Moon" };
-            if (age < 20.30228) return { name: "Waning Gibbous" };
-            if (age < 23.99361) return { name: "Third Quarter" };
-            if (age < 27.68493) return { name: "Waning Crescent" };
-            return { name: "New Moon" };
+            const fraction = (1 - Math.cos((age / 29.53058867) * 2 * Math.PI)) / 2;
+            const percent = Math.round(fraction * 100);
+
+            const isWaxing = age <= (29.53058867 / 2);
+            const sign = isWaxing ? "+" : "-";
+
+            return `${sign}${percent}%`;
         }
 
-        function getMoonRiseSet(now, isRise) {
+        function getMoonPosition(date) {
+            const d = (date.getTime() / 86400000) - 10957.5;
+            
+            const L = (218.316 + 13.176396 * d) % 360;
+            const M = (134.963 + 13.064993 * d) % 360;
+            const F = (93.272 + 13.229350 * d) % 360;
+            
+            const l = L + 6.289 * Math.sin(M * RAD);
+            const b = 5.128 * Math.sin(F * RAD);
+            const e = 23.439 - 0.0000004 * d;
+            
+            const lRad = l * RAD;
+            const bRad = b * RAD;
+            const eRad = e * RAD;
+            
+            const x = Math.cos(bRad) * Math.cos(lRad);
+            const y = Math.cos(bRad) * Math.sin(lRad) * Math.cos(eRad) - Math.sin(bRad) * Math.sin(eRad);
+            const z = Math.cos(bRad) * Math.sin(lRad) * Math.sin(eRad) + Math.sin(bRad) * Math.cos(eRad);
+            
+            let ra = Math.atan2(y, x) * DEG;
+            if (ra < 0) ra += 360;
+            const dec = Math.asin(z) * DEG;
+            
+            return { ra, dec };
+        }
+
+        function getMoonAltitude(date, lat, lon) {
+            const pos = getMoonPosition(date);
+            const lst = getLST(date, lon) * 15;
+            let ha = lst - pos.ra;
+            
+            const latRad = lat * RAD;
+            const decRad = pos.dec * RAD;
+            const haRad = ha * RAD;
+            
+            const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
+            return Math.asin(sinAlt) * DEG;
+        }
+
+        function getNextMoonEvent(fromDate, lat, lon, targetIsRise) {
             if (!hasLocation) return "--:--";
-            const jd = getJulianDate(now);
-            const lunarAge = ((jd - 2451549.5) % 29.53058867 + 29.53058867) % 29.53058867;
-            const moonOffsetHours = (lunarAge / 29.53058867) * 24;
-
-            const baseTime = isRise ? 6 : 18;
-            const approxLocalTime = (baseTime + moonOffsetHours) % 24;
-
-            return formatHM(approxLocalTime);
+            
+            const targetAlt = 0.125;
+            let t0 = new Date(fromDate.getTime());
+            let alt0 = getMoonAltitude(t0, lat, lon) - targetAlt;
+            
+            const stepMinutes = 30;
+            const maxSteps = (36 * 60) / stepMinutes;
+            
+            for (let i = 1; i <= maxSteps; i++) {
+                let t1 = new Date(fromDate.getTime() + i * stepMinutes * 60 * 1000);
+                let alt1 = getMoonAltitude(t1, lat, lon) - targetAlt;
+                
+                const isRise = alt0 < 0 && alt1 >= 0;
+                const isSet = alt0 >= 0 && alt1 < 0;
+                
+                if ((targetIsRise && isRise) || (!targetIsRise && isSet)) {
+                    const fraction = -alt0 / (alt1 - alt0);
+                    const eventTime = new Date(t0.getTime() + fraction * stepMinutes * 60 * 1000);
+                    return `${pad(eventTime.getHours())}:${pad(eventTime.getMinutes())}`;
+                }
+                
+                t0 = t1;
+                alt0 = alt1;
+            }
+            
+            return "--:--";
         }
 
         function updateClocks() {
@@ -459,20 +616,32 @@
             const solarHours = getLocalSolarTime(now, userLon);
             document.getElementById('solar-time').textContent = formatHMS(solarHours);
 
+            if (hasLocation) {
+                const elevation = getCurrentSolarElevation(now, userLat, userLon);
+                if (elevation !== null) {
+                    const formattedElev = `${elevation >= 0 ? '+' : ''}${elevation.toFixed(1)}°`;
+                    document.getElementById('sun-elevation').textContent = `Elev: ${formattedElev}`;
+                }
+            }
+
             checkSunPosition(now);
         }
 
         function updateAstroData() {
             const now = new Date();
             
-            document.getElementById('sunrise').textContent = getSunRiseSet(now, userLat, userLon, true);
-            document.getElementById('sunset').textContent = getSunRiseSet(now, userLat, userLon, false);
+            const { sunrise, sunset } = getNextSunriseAndSunset(now, userLat, userLon);
+            document.getElementById('sunrise').textContent = sunrise ? `${pad(sunrise.getHours())}:${pad(sunrise.getMinutes())}` : "N/A";
+            document.getElementById('sunset').textContent = sunset ? `${pad(sunset.getHours())}:${pad(sunset.getMinutes())}` : "N/A";
             
-            const moonData = getMoonPhaseData(now);
-            document.getElementById('moon-phase').textContent = moonData.name;
+            const { start, end } = getNextAstroTwilightEvents(now, userLat, userLon);
+            document.getElementById('astro-start').textContent = start ? `${pad(start.getHours())}:${pad(start.getMinutes())}` : "N/A";
+            document.getElementById('astro-end').textContent = end ? `${pad(end.getHours())}:${pad(end.getMinutes())}` : "N/A";
 
-            document.getElementById('moonrise').textContent = getMoonRiseSet(now, true);
-            document.getElementById('moonset').textContent = getMoonRiseSet(now, false);
+            document.getElementById('moon-phase').textContent = getMoonIlluminationData(now);
+
+            document.getElementById('moonrise').textContent = getNextMoonEvent(now, userLat, userLon, true);
+            document.getElementById('moonset').textContent = getNextMoonEvent(now, userLat, userLon, false);
         }
 
         setInterval(updateClocks, 1000);
