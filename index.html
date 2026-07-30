@@ -388,85 +388,161 @@
             return (lst % 24 + 24) % 24;
         }
 
-        /* --- ACCURATE SOLAR & TWILIGHT CALCULATIONS --- */
+        /* --- HIGH-PRECISION NOAA / MEEUS SOLAR POSITION & EVENT ENGINE --- */
 
-        function getGamma(date) {
-            const start = new Date(date.getFullYear(), 0, 0);
-            const diff = date - start;
-            const oneDay = 1000 * 60 * 60 * 24;
-            const dayOfYear = Math.floor(diff / oneDay);
-            const hour = date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
-            return ((2 * Math.PI) / 365) * (dayOfYear - 1 + (hour - 12) / 24);
-        }
+        function getNOAASolarDetails(date) {
+            const jd = getJulianDate(date);
+            const jc = (jd - 2451545.0) / 36525.0;
 
-        function getSolarParams(date) {
-            const gamma = getGamma(date);
-            const eqTime = 229.18 * (
-                0.000075 +
-                0.001868 * Math.cos(gamma) -
-                0.032077 * Math.sin(gamma) -
-                0.014615 * Math.cos(2 * gamma) -
-                0.040849 * Math.sin(2 * gamma)
+            // Geometric Mean Longitude of Sun (degrees)
+            let L0 = 280.46646 + jc * (36000.76983 + jc * 0.0003032);
+            L0 = (L0 % 360 + 360) % 360;
+
+            // Mean Anomaly of Sun (degrees)
+            const M = 357.52911 + jc * (35999.05029 - 0.0001537 * jc);
+            const mRad = M * RAD;
+
+            // Eccentricity of Earth's Orbit
+            const e = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+
+            // Sun Equation of Center
+            const C = Math.sin(mRad) * (1.914602 - jc * (0.004817 + 0.000014 * jc)) +
+                      Math.sin(2 * mRad) * (0.019993 - 0.000101 * jc) +
+                      Math.sin(3 * mRad) * 0.000289;
+
+            // Sun True Longitude & Apparent Longitude (degrees)
+            const sunTrueLong = L0 + C;
+            const omega = 125.04 - 1934.136 * jc;
+            const lambda = sunTrueLong - 0.00569 - 0.00478 * Math.sin(omega * RAD);
+
+            // Mean Obliquity of the Ecliptic (degrees)
+            const seconds = 21.448 - jc * (46.8150 + jc * (0.00059 - jc * 0.001813));
+            const obqMean = 23.0 + (26.0 + seconds / 60.0) / 60.0;
+            const obqCorr = obqMean + 0.00256 * Math.cos(omega * RAD);
+
+            // Sun Declination (radians)
+            const declination = Math.asin(Math.sin(obqCorr * RAD) * Math.sin(lambda * RAD));
+
+            // Equation of Time (minutes)
+            const y = Math.tan((obqCorr / 2.0) * RAD) * Math.tan((obqCorr / 2.0) * RAD);
+            const l0Rad = L0 * RAD;
+            const eqTime = 4.0 * DEG * (
+                y * Math.sin(2.0 * l0Rad) -
+                2.0 * e * Math.sin(mRad) +
+                4.0 * e * y * Math.sin(mRad) * Math.cos(2.0 * l0Rad) -
+                0.5 * y * y * Math.sin(4.0 * l0Rad) -
+                1.25 * e * e * Math.sin(2.0 * mRad)
             );
-
-            const declination = 
-                0.006918 -
-                0.399912 * Math.cos(gamma) +
-                0.070257 * Math.sin(gamma) -
-                0.006758 * Math.cos(2 * gamma) +
-                0.000907 * Math.sin(2 * gamma) -
-                0.002697 * Math.cos(3 * gamma) +
-                0.00148 * Math.sin(3 * gamma);
 
             return { eqTime, declination };
         }
 
         function getLocalSolarTime(now, lon) {
-            const { eqTime } = getSolarParams(now);
+            const { eqTime } = getNOAASolarDetails(now);
             const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
-            const solarTime = utcHours + (lon / 15.0) + (eqTime / 60);
+            // Apparent Solar Time = UTC + Longitude offset + Equation of Time
+            const solarTime = utcHours + (lon / 15.0) + (eqTime / 60.0);
             return (solarTime % 24 + 24) % 24;
         }
 
-        function getSolarEventTime(date, lat, lng, isSunrise, zenithAngle = 90.833) {
-            const { eqTime, declination } = getSolarParams(date);
-            const zenith = zenithAngle * RAD;
+        function getCurrentSolarElevation(now, lat, lng) {
+            if (!hasLocation) return null;
+            const { eqTime, declination } = getNOAASolarDetails(now);
             const latRad = lat * RAD;
 
-            const cosHA = (Math.cos(zenith) / (Math.cos(latRad) * Math.cos(declination))) - 
-                          (Math.tan(latRad) * Math.tan(declination));
+            const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes() + now.getUTCSeconds() / 60 + now.getUTCMilliseconds() / 60000;
+            const trueSolarTime = utcMinutes + eqTime + (4.0 * lng);
+            const ha = ((trueSolarTime / 4.0) - 180.0) * RAD;
 
-            if (cosHA > 1 || cosHA < -1) return null;
+            const sinElevation = Math.sin(latRad) * Math.sin(declination) +
+                                 Math.cos(latRad) * Math.cos(declination) * Math.cos(ha);
 
-            let ha = Math.acos(cosHA) * DEG;
-            if (isSunrise) ha = -ha;
+            const geoElevation = Math.asin(Math.max(-1, Math.min(1, sinElevation))) * DEG;
 
-            const solarNoonUTC = 720 - (4 * lng) - eqTime;
-            const eventUTCMinutes = solarNoonUTC + (ha * 4);
+            // Atmospheric Refraction Correction
+            let refraction = 0;
+            if (geoElevation > -0.85) {
+                const te = Math.tan((geoElevation + 10.3 / (geoElevation + 5.11)) * RAD);
+                refraction = 1.02 / te / 60.0; // degrees
+            }
 
-            const eventDate = new Date(date);
-            eventDate.setUTCHours(0, 0, 0, 0);
-            eventDate.setUTCMinutes(eventUTCMinutes);
+            return geoElevation + refraction;
+        }
 
-            return eventDate;
+        function getSolarEventAltitudeDiff(date, lat, lng, targetZenithAngle) {
+            const { eqTime, declination } = getNOAASolarDetails(date);
+            const latRad = lat * RAD;
+
+            const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60 + date.getUTCMilliseconds() / 60000;
+            const trueSolarTime = utcMinutes + eqTime + (4.0 * lng);
+            const ha = ((trueSolarTime / 4.0) - 180.0) * RAD;
+
+            const cosZenith = Math.sin(latRad) * Math.sin(declination) +
+                              Math.cos(latRad) * Math.cos(declination) * Math.cos(ha);
+            const zenith = Math.acos(Math.max(-1, Math.min(1, cosZenith))) * DEG;
+
+            return zenith - targetZenithAngle;
+        }
+
+        function getNextSolarEventPrecise(fromDate, lat, lng, targetZenithAngle, targetIsRise) {
+            if (!hasLocation) return null;
+
+            let t0 = new Date(fromDate.getTime());
+            let diff0 = getSolarEventAltitudeDiff(t0, lat, lng, targetZenithAngle);
+
+            const stepMinutes = 15;
+            const maxSteps = (36 * 60) / stepMinutes; // Search ahead up to 36 hours
+
+            for (let i = 1; i <= maxSteps; i++) {
+                let t1 = new Date(fromDate.getTime() + i * stepMinutes * 60 * 1000);
+                let diff1 = getSolarEventAltitudeDiff(t1, lat, lng, targetZenithAngle);
+
+                // Crossing detected
+                const isRise = diff0 > 0 && diff1 <= 0;
+                const isSet = diff0 <= 0 && diff1 > 0;
+
+                if ((targetIsRise && isRise) || (!targetIsRise && isSet)) {
+                    // Refine exact zenith crossing with binary search (bisection)
+                    let low = t0.getTime();
+                    let high = t1.getTime();
+                    let midTime = low;
+
+                    for (let step = 0; step < 10; step++) {
+                        midTime = (low + high) / 2;
+                        let midDiff = getSolarEventAltitudeDiff(new Date(midTime), lat, lng, targetZenithAngle);
+
+                        if (targetIsRise) {
+                            if (midDiff > 0) low = midTime;
+                            else high = midTime;
+                        } else {
+                            if (midDiff <= 0) low = midTime;
+                            else high = midTime;
+                        }
+                    }
+
+                    const eventTime = new Date(midTime);
+                    
+                    // Round time to nearest minute for display
+                    if (eventTime.getSeconds() >= 30) {
+                        eventTime.setMinutes(eventTime.getMinutes() + 1);
+                    }
+
+                    return eventTime;
+                }
+
+                t0 = t1;
+                diff0 = diff1;
+            }
+
+            return null;
         }
 
         function getNextSunriseAndSunset(now, lat, lng) {
             if (!hasLocation) return { sunrise: null, sunset: null };
 
-            let sunrise = getSolarEventTime(now, lat, lng, true);
-            let sunset = getSolarEventTime(now, lat, lng, false);
-
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            if (!sunrise || now >= sunrise) {
-                sunrise = getSolarEventTime(tomorrow, lat, lng, true);
-            }
-
-            if (!sunset || now >= sunset) {
-                sunset = getSolarEventTime(tomorrow, lat, lng, false);
-            }
+            // Official Solar Horizon Zenith Angle = 90° 50' = 90.8333° (includes atmospheric refraction & semi-diameter)
+            const sunrise = getNextSolarEventPrecise(now, lat, lng, 90.8333, true);
+            const sunset = getNextSolarEventPrecise(now, lat, lng, 90.8333, false);
 
             return { sunrise, sunset };
         }
@@ -474,36 +550,11 @@
         function getNextAstroTwilightEvents(now, lat, lng) {
             if (!hasLocation) return { start: null, end: null };
 
-            let astroStart = getSolarEventTime(now, lat, lng, true, 108);
-            let astroEnd = getSolarEventTime(now, lat, lng, false, 108);
-
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            if (!astroStart || now >= astroStart) {
-                astroStart = getSolarEventTime(tomorrow, lat, lng, true, 108);
-            }
-
-            if (!astroEnd || now >= astroEnd) {
-                astroEnd = getSolarEventTime(tomorrow, lat, lng, false, 108);
-            }
+            // Astronomical Twilight Zenith Angle = 108° (-18° elevation)
+            const astroStart = getNextSolarEventPrecise(now, lat, lng, 108.0, true);
+            const astroEnd = getNextSolarEventPrecise(now, lat, lng, 108.0, false);
 
             return { start: astroStart, end: astroEnd };
-        }
-
-        function getCurrentSolarElevation(now, lat, lng) {
-            if (!hasLocation) return null;
-            const { eqTime, declination } = getSolarParams(now);
-            const latRad = lat * RAD;
-
-            const localTimeMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-            const trueSolarTime = localTimeMinutes + eqTime + (4 * lng) - (-now.getTimezoneOffset());
-            const ha = ((trueSolarTime / 4) - 180) * RAD;
-
-            const sinElevation = Math.sin(latRad) * Math.sin(declination) +
-                                 Math.cos(latRad) * Math.cos(declination) * Math.cos(ha);
-
-            return Math.asin(sinElevation) * DEG;
         }
 
         function checkSunPosition(now) {
@@ -572,10 +623,6 @@
             return { ra, dec, hp };
         }
 
-        function getMoonPosition(date) {
-            return getMoonPositionDetailed(date);
-        }
-
         function getMoonIlluminationData(now) {
             const d = (now.getTime() / 86400000) - 10957.5;
 
@@ -609,7 +656,7 @@
             return `${sign}${percent}%`;
         }
 
-        // Topocentric Apparent Elevation relative to the atmospheric horizon
+        // Topocentric Apparent Elevation relative to atmospheric horizon
         function getMoonApparentAltitude(date, lat, lon) {
             const pos = getMoonPositionDetailed(date);
             const lst = getLST(date, lon) * 15;
@@ -639,7 +686,7 @@
             let alt0 = getMoonApparentAltitude(t0, lat, lon);
 
             const stepMinutes = 30;
-            const maxSteps = (36 * 60) / stepMinutes; // Search window up to 36 hours ahead
+            const maxSteps = (36 * 60) / stepMinutes;
 
             for (let i = 1; i <= maxSteps; i++) {
                 let t1 = new Date(fromDate.getTime() + i * stepMinutes * 60 * 1000);
@@ -649,7 +696,6 @@
                 const isSet = alt0 >= 0 && alt1 < 0;
 
                 if ((targetIsRise && isRise) || (!targetIsRise && isSet)) {
-                    // Refine exact horizon crossing with a high-precision binary search (bisection method)
                     let low = t0.getTime();
                     let high = t1.getTime();
                     let midTime = low;
@@ -669,7 +715,6 @@
 
                     const eventTime = new Date(midTime);
                     
-                    // Round time to nearest minute for clean clock presentation
                     if (eventTime.getSeconds() >= 30) {
                         eventTime.setMinutes(eventTime.getMinutes() + 1);
                     }
